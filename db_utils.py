@@ -9,7 +9,8 @@ import requests
 # Costanti DB
 DB_DIR = os.path.join(os.path.dirname(__file__), 'db')
 DB_PATH = os.path.join(DB_DIR, 'quotazioni.db')
-HF_DATASET_URL = "INSERISCI_QUI_IL_LINK"
+# Link del file GZIP dal tuo Hugging Face Dataset
+HF_DATASET_URL = "https://huggingface.co/datasets/matto0201/casescraped/resolve/main/quotazioni.db.gz"
 
 def ensure_db():
     if not os.path.exists(DB_PATH) and HF_DATASET_URL != "INSERISCI_QUI_IL_LINK":
