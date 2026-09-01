@@ -6,6 +6,7 @@ import os
 
 st.set_page_config(page_title="Esplora Dettaglio - OMI", layout="wide")
 
+# Esci dalla cartella 'pages' per trovare 'db'
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db', 'quotazioni.db')
 TUTTI = "Tutti"
 

@@ -6,7 +6,8 @@ import os
 
 st.set_page_config(page_title="Analisi Quotazioni Immobiliari", layout="wide")
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'db', 'quotazioni.db')
+# Esci dalla cartella 'pages' per trovare la cartella 'db' nella root del progetto
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db', 'quotazioni.db')
 TUTTI = "Tutti"
 
 @st.cache_resource
