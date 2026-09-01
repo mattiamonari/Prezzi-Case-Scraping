@@ -3,16 +3,11 @@ import pandas as pd
 import sqlite3
 import plotly.graph_objects as go
 import os
+from db_utils import get_db_connection
 
 st.set_page_config(page_title="Analisi Quotazioni Immobiliari", layout="wide")
 
-# Esci dalla cartella 'pages' per trovare la cartella 'db' nella root del progetto
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'db', 'quotazioni.db')
 TUTTI = "Tutti"
-
-@st.cache_resource
-def get_db_connection():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 def run_query(query, params=()):
     conn = get_db_connection()
