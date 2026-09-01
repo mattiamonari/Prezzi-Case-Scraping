@@ -13,7 +13,10 @@ DB_PATH = os.path.join(DB_DIR, 'quotazioni.db')
 HF_DATASET_URL = "https://huggingface.co/datasets/matto0201/casescraped/resolve/main/quotazioni.db.gz"
 
 def ensure_db():
-    if not os.path.exists(DB_PATH) and HF_DATASET_URL != "INSERISCI_QUI_IL_LINK":
+    # Verifica se il DB non esiste o è un file vuoto/incompleto (meno di 1 MB)
+    db_exists_and_valid = os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 1000000
+    
+    if not db_exists_and_valid and HF_DATASET_URL != "INSERISCI_QUI_IL_LINK":
         os.makedirs(DB_DIR, exist_ok=True)
         with st.spinner("🔄 Primo avvio (o riavvio server): Download del database in corso..."):
             gz_path = DB_PATH + ".gz"
