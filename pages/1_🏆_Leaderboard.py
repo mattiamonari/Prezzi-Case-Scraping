@@ -10,8 +10,13 @@ st.set_page_config(page_title="Analisi Quotazioni Immobiliari", layout="wide")
 TUTTI = "Tutti"
 
 def run_query(query, params=()):
-    conn = get_db_connection()
-    return pd.read_sql_query(query, conn, params=params)
+    try:
+        conn = get_db_connection()
+        return pd.read_sql_query(query, conn, params=params)
+    except Exception as e:
+        import streamlit as st
+        st.error(f"Errore SQL Reale:\n{e}\n\nQuery:\n{query}\n\nParams:\n{params}")
+        st.stop()
 
 def get_top_incremento(group_col_id, group_col_nome, group_col_sub, metrica, is_compra, utilizzo, sem_start, sem_end, filter_col=None, filter_val=None):
     col_min = 'val_compravendita_min' if is_compra else 'val_locazione_min'
