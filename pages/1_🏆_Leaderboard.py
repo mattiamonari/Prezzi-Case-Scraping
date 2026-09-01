@@ -18,44 +18,42 @@ def run_query(query, params=()):
         st.error(f"Errore SQL Reale:\n{e}\n\nQuery:\n{query}\n\nParams:\n{params}")
         st.stop()
 
-def get_top_incremento(group_col_id, group_col_nome, group_col_sub, metrica, is_compra, utilizzo, sem_start, sem_end, filter_col=None, filter_val=None):
-    col_min = 'val_compravendita_min' if is_compra else 'val_locazione_min'
-    col_max = 'val_compravendita_max' if is_compra else 'val_locazione_max'
+def get_top_incremento(livello, metrica, is_compra, utilizzo, sem_start, sem_end, filter_col=None, filter_val=None):
+    col_prezzo = 'prezzo_compra' if is_compra else 'prezzo_loca'
     
-    where_clause = ["q.semestre_id >= ?", "q.semestre_id <= ?"]
+    where_clause = ["semestre_id >= ?", "semestre_id <= ?"]
     params = [sem_start, sem_end]
     
     if utilizzo != TUTTI:
-        where_clause.append("q.utilizzo_id = ?")
+        where_clause.append("utilizzo_id = ?")
         params.append(utilizzo)
         
     if filter_col and filter_val:
         where_clause.append(f"{filter_col} = ?")
         params.append(filter_val)
         
+    # Scegli la tabella aggregata giusta in base al livello
+    if livello == 'provincia':
+        table = "agg_provincia"
+    elif livello == 'comune':
+        table = "agg_comune"
+    elif livello == 'zona':
+        table = "agg_zona"
+        
     where_sql = "WHERE " + " AND ".join(where_clause)
     
     query = f"""
-    WITH prezzi_semestre AS (
-        SELECT 
-            {group_col_id} as id, 
-            {group_col_nome} as nome,
-            {group_col_sub} as sub,
-            q.semestre_id,
-            AVG({col_min} + {col_max})/2.0 as prezzo
-        FROM quotazioni q
-        JOIN zona z ON q.zona_id = z.id
-        JOIN comune c ON z.comune_id = c.id
-        JOIN provincia p ON c.provincia_id = p.id
+    WITH prezzi_filtrati AS (
+        SELECT id, nome, sub, semestre_id, {col_prezzo} as prezzo
+        FROM {table}
         {where_sql}
-        GROUP BY {group_col_id}, {group_col_nome}, {group_col_sub}, q.semestre_id
     ),
     primi_ultimi AS (
         SELECT 
             id, nome, sub,
             FIRST_VALUE(prezzo) OVER(PARTITION BY id ORDER BY semestre_id ASC) as prezzo_iniziale,
             FIRST_VALUE(prezzo) OVER(PARTITION BY id ORDER BY semestre_id DESC) as prezzo_finale
-        FROM prezzi_semestre
+        FROM prezzi_filtrati
     )
     SELECT DISTINCT 
         id, nome, sub,
@@ -182,32 +180,39 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     if provincia_id == TUTTI:
-        top_prov = get_top_incremento("p.id", "p.nome", "'Nazionale'", metrica, is_compra, sel_utilizzo, sem_start, sem_end)
-        draw_kpi_card("Miglior Provincia", top_prov)
-    else:
-        draw_kpi_card("Miglior Provincia", None, selected_value=sel_prov_nome)
-
+        top_prov = get_top_incremento('provincia', metrica, is_compra, sel_utilizzo, sem_start, sem_end)
+        if top_prov is not None:
+            draw_kpi_card("Miglior Provincia", top_prov)
+        else:
+            draw_kpi_card("Miglior Provincia", None, selected_value=sel_prov_nome)
+            
 with col2:
     if comune_id == TUTTI:
-        filter_col = "c.provincia_id" if provincia_id != TUTTI else None
+        filter_col = "provincia_id" if provincia_id != TUTTI else None
         filter_val = provincia_id if provincia_id != TUTTI else None
-        top_com = get_top_incremento("c.id", "c.nome", "p.nome || ' (' || p.id || ')'", metrica, is_compra, sel_utilizzo, sem_start, sem_end, filter_col, filter_val)
-        draw_kpi_card("Miglior Comune", top_com)
+        top_com = get_top_incremento('comune', metrica, is_compra, sel_utilizzo, sem_start, sem_end, filter_col, filter_val)
+        if top_com is not None:
+            draw_kpi_card("Miglior Comune", top_com)
+        else:
+            draw_kpi_card("Miglior Comune", None, selected_value="Seleziona un comune")
     else:
         draw_kpi_card("Miglior Comune", None, selected_value=sel_com_nome)
-
+        
 with col3:
     if comune_id != TUTTI:
-        filter_col = "z.comune_id"
+        filter_col = "comune_id"
         filter_val = comune_id
     elif provincia_id != TUTTI:
-        filter_col = "c.provincia_id"
+        filter_col = "provincia_id"
         filter_val = provincia_id
     else:
         filter_col = filter_val = None
         
-    top_zona = get_top_incremento("z.id", "z.fascia_descrizione", "c.nome || ' (' || p.id || ')'", metrica, is_compra, sel_utilizzo, sem_start, sem_end, filter_col, filter_val)
-    draw_kpi_card("Miglior Fascia/Zona", top_zona)
+    top_zona = get_top_incremento('zona', metrica, is_compra, sel_utilizzo, sem_start, sem_end, filter_col, filter_val)
+    if top_zona is not None:
+        draw_kpi_card("Miglior Fascia/Zona", top_zona)
+    else:
+        draw_kpi_card("Miglior Fascia/Zona", None, selected_value="Seleziona una zona")
 
 st.markdown("---")
 
