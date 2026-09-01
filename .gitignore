@@ -1,0 +1,13 @@
+db/
+__pycache__/
+.env
+.venv/
+venv/
+scraper.py
+compress_db.py
+sync_db.py
+check_db.py
+check_av.py
+check_av2.py
+check_ba.py
+*.bat
