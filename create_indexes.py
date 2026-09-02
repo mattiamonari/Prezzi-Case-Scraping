@@ -3,7 +3,7 @@ import time
 
 print("Creating indexes...")
 start = time.time()
-conn = sqlite3.connect('db/quotazioni_clean.db')
+conn = sqlite3.connect('db/quotazioni.db')
 c = conn.cursor()
 
 c.execute("CREATE INDEX IF NOT EXISTS idx_quotazioni_zona ON quotazioni(zona_id);")

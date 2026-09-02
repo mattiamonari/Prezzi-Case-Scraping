@@ -1,7 +1,7 @@
 import sqlite3
 import time
 
-conn = sqlite3.connect('db/quotazioni_clean.db')
+conn = sqlite3.connect('db/quotazioni.db')
 c = conn.cursor()
 
 print("1/3 Creazione tabella aggregata Province...")

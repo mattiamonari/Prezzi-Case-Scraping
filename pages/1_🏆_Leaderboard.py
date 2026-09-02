@@ -18,7 +18,7 @@ def run_query(query, params=()):
         st.error(f"Errore SQL Reale:\n{e}\n\nQuery:\n{query}\n\nParams:\n{params}")
         st.stop()
 
-def get_top_incremento(livello, metrica, is_compra, utilizzo, sem_start, sem_end, filter_col=None, filter_val=None):
+def get_top_incremento(livello, metrica, is_compra, utilizzo, sem_start, sem_end, filter_col=None, filter_val=None, is_top=True):
     col_prezzo = 'prezzo_compra' if is_compra else 'prezzo_loca'
     
     where_clause = ["semestre_id >= ?", "semestre_id <= ?"]
@@ -41,6 +41,7 @@ def get_top_incremento(livello, metrica, is_compra, utilizzo, sem_start, sem_end
         table = "agg_zona"
         
     where_sql = "WHERE " + " AND ".join(where_clause)
+    order_dir = "DESC" if is_top else "ASC"
     
     query = f"""
     WITH prezzi_filtrati AS (
@@ -61,13 +62,48 @@ def get_top_incremento(livello, metrica, is_compra, utilizzo, sem_start, sem_end
         ((prezzo_finale - prezzo_iniziale) / prezzo_iniziale) * 100 as incremento
     FROM primi_ultimi
     WHERE prezzo_iniziale > 0
-    ORDER BY incremento DESC
+    ORDER BY incremento {order_dir}
     LIMIT 1
     """
     df = run_query(query, tuple(params))
     return df.iloc[0] if not df.empty else None
 
-def draw_kpi_card(label, data, selected_value=None):
+def get_top_absolute(livello, metrica, is_compra, utilizzo, sem, filter_col=None, filter_val=None, is_max=True):
+    col_prezzo = 'prezzo_compra' if is_compra else 'prezzo_loca'
+    
+    where_clause = ["semestre_id = ?"]
+    params = [sem]
+    
+    if utilizzo != TUTTI:
+        where_clause.append("utilizzo_id = ?")
+        params.append(utilizzo)
+        
+    if filter_col and filter_val:
+        where_clause.append(f"{filter_col} = ?")
+        params.append(filter_val)
+        
+    if livello == 'provincia':
+        table = "agg_provincia"
+    elif livello == 'comune':
+        table = "agg_comune"
+    elif livello == 'zona':
+        table = "agg_zona"
+        
+    where_sql = "WHERE " + " AND ".join(where_clause)
+    order_dir = "DESC" if is_max else "ASC"
+    
+    query = f"""
+    SELECT id, nome, sub, {col_prezzo} as prezzo
+    FROM {table}
+    {where_sql}
+    AND {col_prezzo} > 0
+    ORDER BY prezzo {order_dir}
+    LIMIT 1
+    """
+    df = run_query(query, tuple(params))
+    return df.iloc[0] if not df.empty else None
+
+def draw_kpi_card(label, data, selected_value=None, is_absolute=False, unit="€/mq"):
     if selected_value:
         main_value = selected_value
         subtitle = "Selezionata/o dal filtro"
@@ -75,10 +111,14 @@ def draw_kpi_card(label, data, selected_value=None):
     elif data is not None:
         main_value = data['nome']
         subtitle = data['sub']
-        incr = data['incremento']
-        color = "green" if incr > 0 else "red" if incr < 0 else "gray"
-        arrow = "▲" if incr > 0 else "▼" if incr < 0 else ""
-        incr_html = f"<div style='font-size: 16px; font-weight: bold; color: {color};'>{arrow} {incr:+.1f}%</div>"
+        if is_absolute:
+            prezzo = data['prezzo']
+            incr_html = f"<div style='font-size: 16px; font-weight: bold; color: #0068c9;'>{prezzo:,.0f} {unit}</div>"
+        else:
+            incr = data.get('incremento', 0)
+            color = "green" if incr > 0 else "red" if incr < 0 else "gray"
+            arrow = "▲" if incr > 0 else "▼" if incr < 0 else ""
+            incr_html = f"<div style='font-size: 16px; font-weight: bold; color: {color};'>{arrow} {incr:+.1f}%</div>"
     else:
         main_value = "N/A"
         subtitle = "-"
@@ -113,6 +153,7 @@ st.sidebar.header("Filtri Ricerca")
 
 metrica = st.sidebar.radio("Tipo Valore", options=["Compravendita (€/mq)", "Locazione (€/mq x mese)"])
 is_compra = metrica == "Compravendita (€/mq)"
+unit_str = "€/mq" if is_compra else "€/mq/mese"
 
 df_utilizzi = run_query("SELECT id FROM utilizzo")
 utilizzi_opts = [TUTTI] + df_utilizzi['id'].tolist()
@@ -213,6 +254,129 @@ with col3:
         draw_kpi_card("Miglior Fascia/Zona", top_zona)
     else:
         draw_kpi_card("Miglior Fascia/Zona", None, selected_value="Seleziona una zona")
+
+st.markdown("---")
+st.subheader("📉 Maggior Ribasso Storico (Totale)")
+
+col_b1, col_b2, col_b3 = st.columns(3)
+
+with col_b1:
+    if provincia_id == TUTTI:
+        bottom_prov = get_top_incremento('provincia', metrica, is_compra, sel_utilizzo, sem_start, sem_end, is_top=False)
+        if bottom_prov is not None:
+            draw_kpi_card("Peggior Provincia", bottom_prov)
+        else:
+            draw_kpi_card("Peggior Provincia", None, selected_value=sel_prov_nome)
+            
+with col_b2:
+    if comune_id == TUTTI:
+        filter_col = "provincia_id" if provincia_id != TUTTI else None
+        filter_val = provincia_id if provincia_id != TUTTI else None
+        bottom_com = get_top_incremento('comune', metrica, is_compra, sel_utilizzo, sem_start, sem_end, filter_col, filter_val, is_top=False)
+        if bottom_com is not None:
+            draw_kpi_card("Peggior Comune", bottom_com)
+        else:
+            draw_kpi_card("Peggior Comune", None, selected_value="Seleziona un comune")
+    else:
+        draw_kpi_card("Peggior Comune", None, selected_value=sel_com_nome)
+        
+with col_b3:
+    if comune_id != TUTTI:
+        filter_col = "comune_id"
+        filter_val = comune_id
+    elif provincia_id != TUTTI:
+        filter_col = "provincia_id"
+        filter_val = provincia_id
+    else:
+        filter_col = filter_val = None
+        
+    bottom_zona = get_top_incremento('zona', metrica, is_compra, sel_utilizzo, sem_start, sem_end, filter_col, filter_val, is_top=False)
+    if bottom_zona is not None:
+        draw_kpi_card("Peggior Fascia/Zona", bottom_zona)
+    else:
+        draw_kpi_card("Peggior Fascia/Zona", None, selected_value="Seleziona una zona")
+
+st.markdown("---")
+st.subheader(f"💰 Le più Costose in Assoluto ({sem_end})")
+
+col_c1, col_c2, col_c3 = st.columns(3)
+
+with col_c1:
+    if provincia_id == TUTTI:
+        max_prov = get_top_absolute('provincia', metrica, is_compra, sel_utilizzo, sem_end, is_max=True)
+        if max_prov is not None:
+            draw_kpi_card("Provincia più Costosa", max_prov, is_absolute=True, unit=unit_str)
+        else:
+            draw_kpi_card("Provincia più Costosa", None, selected_value=sel_prov_nome)
+            
+with col_c2:
+    if comune_id == TUTTI:
+        filter_col = "provincia_id" if provincia_id != TUTTI else None
+        filter_val = provincia_id if provincia_id != TUTTI else None
+        max_com = get_top_absolute('comune', metrica, is_compra, sel_utilizzo, sem_end, filter_col, filter_val, is_max=True)
+        if max_com is not None:
+            draw_kpi_card("Comune più Costoso", max_com, is_absolute=True, unit=unit_str)
+        else:
+            draw_kpi_card("Comune più Costoso", None, selected_value="Seleziona un comune")
+    else:
+        draw_kpi_card("Comune più Costoso", None, selected_value=sel_com_nome)
+
+with col_c3:
+    if comune_id != TUTTI:
+        filter_col = "comune_id"
+        filter_val = comune_id
+    elif provincia_id != TUTTI:
+        filter_col = "provincia_id"
+        filter_val = provincia_id
+    else:
+        filter_col = filter_val = None
+        
+    max_zona = get_top_absolute('zona', metrica, is_compra, sel_utilizzo, sem_end, filter_col, filter_val, is_max=True)
+    if max_zona is not None:
+        draw_kpi_card("Fascia/Zona più Costosa", max_zona, is_absolute=True, unit=unit_str)
+    else:
+        draw_kpi_card("Fascia/Zona più Costosa", None, selected_value="Seleziona una zona")
+
+st.markdown("---")
+st.subheader(f"🏷️ Le più Economiche in Assoluto ({sem_end})")
+
+col_d1, col_d2, col_d3 = st.columns(3)
+
+with col_d1:
+    if provincia_id == TUTTI:
+        min_prov = get_top_absolute('provincia', metrica, is_compra, sel_utilizzo, sem_end, is_max=False)
+        if min_prov is not None:
+            draw_kpi_card("Provincia più Economica", min_prov, is_absolute=True, unit=unit_str)
+        else:
+            draw_kpi_card("Provincia più Economica", None, selected_value=sel_prov_nome)
+            
+with col_d2:
+    if comune_id == TUTTI:
+        filter_col = "provincia_id" if provincia_id != TUTTI else None
+        filter_val = provincia_id if provincia_id != TUTTI else None
+        min_com = get_top_absolute('comune', metrica, is_compra, sel_utilizzo, sem_end, filter_col, filter_val, is_max=False)
+        if min_com is not None:
+            draw_kpi_card("Comune più Economico", min_com, is_absolute=True, unit=unit_str)
+        else:
+            draw_kpi_card("Comune più Economico", None, selected_value="Seleziona un comune")
+    else:
+        draw_kpi_card("Comune più Economico", None, selected_value=sel_com_nome)
+
+with col_d3:
+    if comune_id != TUTTI:
+        filter_col = "comune_id"
+        filter_val = comune_id
+    elif provincia_id != TUTTI:
+        filter_col = "provincia_id"
+        filter_val = provincia_id
+    else:
+        filter_col = filter_val = None
+        
+    min_zona = get_top_absolute('zona', metrica, is_compra, sel_utilizzo, sem_end, filter_col, filter_val, is_max=False)
+    if min_zona is not None:
+        draw_kpi_card("Fascia/Zona più Economica", min_zona, is_absolute=True, unit=unit_str)
+    else:
+        draw_kpi_card("Fascia/Zona più Economica", None, selected_value="Seleziona una zona")
 
 st.markdown("---")
 
