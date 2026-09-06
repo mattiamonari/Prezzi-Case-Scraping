@@ -26,7 +26,7 @@ def run_query(query, params=()):
         st.error(f"Errore SQL: {e}")
         return pd.DataFrame()
 
-@st.cache_data(show_spinner="📥 Caricamento GeoJSON province italiane...")
+@st.cache_resource(show_spinner="📥 Caricamento GeoJSON province italiane...")
 def load_geojson_province():
     url = "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson"
     try:
@@ -36,9 +36,12 @@ def load_geojson_province():
     except Exception:
         return None
 
-@st.cache_data(show_spinner="📥 Prima apertura: caricamento GeoJSON comuni (operazione una-tantum, ~30 sec)...")
+@st.cache_resource(show_spinner="📥 Prima apertura: caricamento GeoJSON comuni (operazione una-tantum, ~30 sec)...")
 def load_geojson_comuni():
-    """Carica il GeoJSON di tutti i comuni italiani e normalizza gli ID per il matching."""
+    """Carica il GeoJSON di tutti i comuni italiani e normalizza gli ID per il matching.
+    Usato @st.cache_resource (invece di @st.cache_data) per tenere il grande dict
+    direttamente in RAM senza serializzazione/deserializzazione su disco.
+    """
     url = "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_municipalities.geojson"
     try:
         r = requests.get(url, timeout=120)
@@ -50,12 +53,14 @@ def load_geojson_comuni():
             name = props.get('com_name', props.get('name', ''))
             f['id'] = name.upper().strip()
         return gj
-    except Exception as e:
+    except Exception:
         return None
 
-@st.cache_data(show_spinner="🔍 Filtraggio GeoJSON comuni per provincia...")
+@st.cache_resource(show_spinner="🔍 Filtraggio GeoJSON comuni per provincia...")
 def get_geojson_provincia(prov_acr):
-    """Restituisce il GeoJSON filtrato con solo i comuni della provincia selezionata."""
+    """Restituisce il GeoJSON filtrato con solo i comuni della provincia selezionata.
+    @st.cache_resource: il dict filtrato rimane in RAM per ogni provincia già visitata.
+    """
     full_gj = load_geojson_comuni()
     if full_gj is None:
         return None
