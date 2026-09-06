@@ -28,32 +28,34 @@ def run_query(query, params=()):
 
 @st.cache_resource(show_spinner="📥 Caricamento GeoJSON province italiane...")
 def load_geojson_province():
-    url = "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson"
+    import json
+    import os
     try:
-        r = requests.get(url, timeout=20)
-        r.raise_for_status()
-        return r.json()
-    except Exception:
+        path = os.path.join("data", "geojson", "limits_IT_provinces.geojson")
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        st.error(f"Errore caricamento GeoJSON province: {e}")
         return None
 
-@st.cache_resource(show_spinner="📥 Prima apertura: caricamento GeoJSON comuni (operazione una-tantum, ~30 sec)...")
+@st.cache_resource(show_spinner="📥 Caricamento GeoJSON comuni in RAM...")
 def load_geojson_comuni():
-    """Carica il GeoJSON di tutti i comuni italiani e normalizza gli ID per il matching.
-    Usato @st.cache_resource (invece di @st.cache_data) per tenere il grande dict
-    direttamente in RAM senza serializzazione/deserializzazione su disco.
-    """
-    url = "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_municipalities.geojson"
+    """Carica il GeoJSON di tutti i comuni italiani e normalizza gli ID per il matching."""
+    import json
+    import os
     try:
-        r = requests.get(url, timeout=120)
-        r.raise_for_status()
-        gj = r.json()
+        path = os.path.join("data", "geojson", "limits_IT_municipalities.geojson")
+        with open(path, "r", encoding="utf-8") as f:
+            gj = json.load(f)
+            
         # Imposta feature['id'] = nome comune in maiuscolo per il matching con il DB
         for f in gj.get('features', []):
             props = f.get('properties', {})
             name = props.get('com_name', props.get('name', ''))
             f['id'] = name.upper().strip()
         return gj
-    except Exception:
+    except Exception as e:
+        st.error(f"Errore caricamento GeoJSON comuni: {e}")
         return None
 
 @st.cache_resource(show_spinner="🔍 Filtraggio GeoJSON comuni per provincia...")
