@@ -56,14 +56,14 @@ col_prezzo = "prezzo_compra" if metrica == "Compravendita (€/mq)" else "prezzo
 # --- DATA ---
 query_map = f"""
 SELECT ap.id as provincia_id, p.nome as provincia_nome,
-       AVG({col_prezzo}) as prezzo_medio,
+       AVG(ap.{col_prezzo}) as prezzo_medio,
        COUNT(DISTINCT ac.id) as n_comuni
 FROM agg_provincia ap
 JOIN provincia p ON ap.id = p.id
 LEFT JOIN agg_comune ac ON ac.provincia_id = ap.id 
     AND ac.semestre_id = ap.semestre_id 
     AND ac.utilizzo_id = ap.utilizzo_id
-WHERE ap.semestre_id = ? AND ap.utilizzo_id = ? AND {col_prezzo} > 0
+WHERE ap.semestre_id = ? AND ap.utilizzo_id = ? AND ap.{col_prezzo} > 0
 GROUP BY ap.id, p.nome
 """
 df_map = run_query(query_map, (sel_semestre, sel_utilizzo))
